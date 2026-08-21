@@ -1,18 +1,22 @@
-# Interactive npm publish for a user terminal — no PATH dependencies.
+# npm security-key publish — the correct flow for npm 2FA in 2026.
 #
-# Uses the DSH runtime node and pnpm directly (pnpm is not on the system PATH
-# on this machine). Reads NPM_PUBLISH_TOKEN (User scope, then process), runs
-# the plugin test suite with the runtime node, then publishes with an OTP.
+# npm no longer supports TOTP authenticator codes (maintainer-confirmed, Jan
+# 2026); 2FA is security-key (WebAuthn) based. pnpm cannot complete a WebAuthn
+# challenge, so publishing must use the official npm CLI, whose device flow
+# prints an auth URL: open it in your browser, confirm with your passkey
+# (Windows Hello / phone), and the publish completes automatically.
 #
-# Usage (from your own PowerShell/terminal):
+# No PATH dependencies: uses the runtime node + a locally installed npm CLI.
+#
+# Usage (from your own PowerShell/terminal — the browser step needs YOU):
 #   powershell -ExecutionPolicy Bypass -File E:\Deepseek\Default\dsh-plugin-proxy\scripts\publish-interactive.ps1
 $ErrorActionPreference = 'Stop'
 $root = 'E:\Deepseek\Default\dsh-plugin-proxy'
 $node = 'E:\Program Files\DeepSeek Harness\runtime\node\bin\node.exe'
-$pnpm = 'E:\Program Files\DeepSeek Harness\runtime\node\node_modules\pnpm\bin\pnpm.cjs'
+$npm = 'E:\Deepseek\Default\npm-cli\node_modules\npm\bin\npm-cli.js'
 
 if (-not (Test-Path $node)) { throw "node not found: $node" }
-if (-not (Test-Path $pnpm)) { throw "pnpm not found: $pnpm" }
+if (-not (Test-Path $npm)) { throw "npm CLI not found at $npm — install it first (pnpm add npm --dir E:\Deepseek\Default\npm-cli)" }
 
 $token = [Environment]::GetEnvironmentVariable('NPM_PUBLISH_TOKEN', 'User')
 if (-not $token) { $token = [Environment]::GetEnvironmentVariable('NPM_PUBLISH_TOKEN') }
@@ -28,14 +32,16 @@ try {
   }
   Write-Host '    tests passed (23/23).' -ForegroundColor Green
 
-  $otp = (Read-Host -Prompt 'Enter the 6-digit 2FA code from your authenticator app').Trim()
-  if ($otp -notmatch '^\d{6}$') { throw "invalid OTP format: expected 6 digits" }
-
   $npmrc = Join-Path $root '.npmrc'
   try {
     Set-Content -Path $npmrc -Value ("//registry.npmjs.org/:_authToken=" + $token) -Encoding ascii
-    & $node $pnpm publish --ignore-scripts --no-git-checks --otp $otp
-    if ($LASTEXITCODE -ne 0) { throw "pnpm publish failed (exit $LASTEXITCODE)" }
+    Write-Host ''
+    Write-Host '==> npm will print an authentication URL below. OPEN IT IN YOUR BROWSER,' -ForegroundColor Yellow
+    Write-Host '    confirm with your passkey (Windows Hello / phone), then come back here —' -ForegroundColor Yellow
+    Write-Host '    the publish continues automatically. Do NOT close this window.' -ForegroundColor Yellow
+    Write-Host ''
+    & $node $npm publish --ignore-scripts
+    if ($LASTEXITCODE -ne 0) { throw "npm publish failed (exit $LASTEXITCODE)" }
     Write-Host 'published — check https://www.npmjs.com/package/dsh-plugin-proxy' -ForegroundColor Green
   } finally {
     Remove-Item -Force $npmrc -ErrorAction SilentlyContinue
