@@ -1,8 +1,8 @@
 # One-shot npm publish for a dsh plugin. Token resolution order:
-#   1. $env:NPM_PUBLISH_TOKEN — process, then User scope (User scope reads the
+#   1. $env:NPM_PUBLISH_TOKEN - process, then User scope (User scope reads the
 #      registry, so a `setx` value is visible even without restarting the
 #      long-running DSH service process that spawns this script).
-#   2. $env:NPM_TOKEN — process, then User scope.
+#   2. $env:NPM_TOKEN - process, then User scope.
 #   3. $DSH_HOME/secrets/npm-token.txt
 # Never pasted into chat. Temporary .npmrc is deleted afterwards.
 # Uses pnpm (npm is not on PATH on this machine).
@@ -43,12 +43,12 @@ try {
       & pnpm publish --ignore-scripts --no-git-checks --otp $Otp 2>&1
     } else {
       # Without -Otp the registry will demand a 2FA code; pnpm prompts for it
-      # interactively. In a non-interactive context it fails with EOTP —
+      # interactively. In a non-interactive context it fails with EOTP -
       # run `pnpm publish` in your own terminal instead.
       & pnpm publish --ignore-scripts --no-git-checks 2>&1
     }
     if ($LASTEXITCODE -ne 0) { throw "pnpm publish failed (exit $LASTEXITCODE)" }
-    Write-Host 'published — check https://www.npmjs.com/package/dsh-plugin-proxy'
+    Write-Host 'published - check https://www.npmjs.com/package/dsh-plugin-proxy'
   } finally {
     Pop-Location
   }
