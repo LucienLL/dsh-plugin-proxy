@@ -83,11 +83,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/863683348/dsh-plugin-proxy.git"
+    "url": "git+https://github.com/LucienLL/dsh-plugin-proxy.git"
   },
-  "homepage": "https://github.com/863683348/dsh-plugin-proxy#readme",
+  "homepage": "https://github.com/LucienLL/dsh-plugin-proxy#readme",
   "bugs": {
-    "url": "https://github.com/863683348/dsh-plugin-proxy/issues"
+    "url": "https://github.com/LucienLL/dsh-plugin-proxy/issues"
   },
   "publishConfig": {
     "access": "public"
