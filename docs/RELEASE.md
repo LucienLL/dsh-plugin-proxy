@@ -6,5 +6,5 @@
 4. **Topic** — add `dsh-plugin` to the GitHub repo topics (API or gh). ✅ `dsh-plugin, deepseek-harness, cordis, proxy, undici` on LucienLL/dsh-plugin-proxy.
 5. **awesome PR** — data/plugins/<owner>__<repo>.yml + generate-readme.mjs; meet 1-day / 10-commit bar; re-run CI after 24h if needed.
    - ✅ 11 commits, fork `LucienLL/awesome-dsh-plugin` branch `add/dsh-plugin-proxy` pushed with entry + regenerated README.
-   - ⏳ PR creation blocked: fine-grained PAT cannot open PRs on third-party repos — user clicks https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/compare/main...LucienLL:add/dsh-plugin-proxy (Create pull request).
-   - ⏳ CI age gate: repo is < 1 day old — expect failure; push empty commit on the branch after 2026-08-22 to re-trigger.
+   - ✅ **PR #2614 已创建（2026-08-22）且 CI 全绿**（Submission gate + check 均 success，首次运行即通过）：https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/2614
+   - ⏳ 待维护者 review/merge（若提意见按反馈修改后推分支即可）。
