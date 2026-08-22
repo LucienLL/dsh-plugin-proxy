@@ -11,3 +11,4 @@
         mode: system
         customUrl: 'http://127.0.0.1:7890'
         noProxy: 'localhost,127.0.0.1,::1'
+        systemPollMs: 30000

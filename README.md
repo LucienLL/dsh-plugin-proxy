@@ -53,6 +53,11 @@ All fields are editable in the settings UI; the same schema accepts composition 
 | `mode` | `system` \| `custom` \| `none` | `system` | Proxy address source. |
 | `customUrl` | string | `http://127.0.0.1:7890` | Used when `mode: custom`. |
 | `noProxy` | string | `localhost,127.0.0.1,::1` | NO_PROXY bypass list (`<local>` maps to the loopbacks). |
+| `systemPollMs` | number | `30000` | Poll interval (ms) for the Windows system proxy while `mode: system` + enabled, so the runtime follows the system proxy being toggled on/off; `0` disables polling. |
+
+In `mode: system` the Windows `ProxyOverride` bypass list is merged into
+NO_PROXY (`<local>` and `*.domain` entries honored; IP-prefix wildcards like
+`127.*` are dropped because undici cannot express them).
 
 ## Development
 

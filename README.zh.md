@@ -51,6 +51,9 @@ dsh plugin --profile web add dsh-plugin-proxy
 | `mode` | `system` \| `custom` \| `none` | `system` | 代理地址来源。 |
 | `customUrl` | string | `http://127.0.0.1:7890` | `mode: custom` 时使用。 |
 | `noProxy` | string | `localhost,127.0.0.1,::1` | 直连名单（`<local>` 映射为本机回环地址）。 |
+| `systemPollMs` | number | `30000` | 系统代理轮询间隔（ms）：`mode: system` 且开关开启时，自动跟随 Windows 系统代理的开/关变化（如 Clash/v2rayN 切换）；`0` 关闭轮询。 |
+
+`mode: system` 时，Windows 的 `ProxyOverride` 直连列表会自动合并进 NO_PROXY（`<local>` 与 `*.domain` 生效；`127.*` 这类 IP 前缀通配因 undici 无法表达会被丢弃）。
 
 ## 开发与测试
 

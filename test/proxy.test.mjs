@@ -9,11 +9,13 @@ import {
   composeNoProxy,
   makeWindowsSystemProxyReader,
   normalizeProxyUrl,
+  parseOverrideEntries,
   parseProxyServer,
   parseRegDword,
   parseRegString,
   queryRegValue,
   resolveProxyState,
+  systemFactsEqual,
 } from '../lib/proxy.js'
 
 test('normalizeProxyUrl accepts bare host:port', () => {
@@ -131,4 +133,41 @@ test('system proxy reader tolerates a failed query', async () => {
   const facts = await reader()
   assert.equal(facts.enabled, false)
   assert.equal(facts.url, null)
+})
+
+test('parseOverrideEntries maps <local> and keeps usable entries only', () => {
+  const entries = parseOverrideEntries('<local>;localhost;*.corp.example;.intra;10.*;127.*;192.168.*;proxy.local:8080')
+  assert.deepEqual(entries, ['localhost', '127.0.0.1', '::1', '*.corp.example', '.intra', 'proxy.local:8080'])
+  assert.deepEqual(parseOverrideEntries(''), [])
+  assert.deepEqual(parseOverrideEntries(undefined), [])
+  assert.deepEqual(parseOverrideEntries('10.*;*'), [])
+})
+
+test('composeNoProxy merges the Windows override into the bypass list', () => {
+  assert.equal(composeNoProxy('localhost,127.0.0.1,::1', '<local>;api.internal;10.*'),
+    'localhost,127.0.0.1,::1,api.internal')
+  assert.equal(composeNoProxy(undefined, undefined), 'localhost,127.0.0.1,::1')
+})
+
+test('resolveProxyState merges the system override in system mode', () => {
+  const on = resolveProxyState(
+    { enabled: true, mode: 'system', customUrl: '', noProxy: '' },
+    { enabled: true, url: 'http://127.0.0.1:10808', http: 'http://127.0.0.1:10808', https: 'http://127.0.0.1:10808', override: '<local>;api.internal;10.*' })
+  assert.equal(on.active, true)
+  assert.equal(on.noProxy, 'localhost,127.0.0.1,::1,api.internal')
+  // Custom mode must NOT pick up the system override.
+  const custom = resolveProxyState(
+    { enabled: true, mode: 'custom', customUrl: 'http://127.0.0.1:7890', noProxy: 'x.internal' },
+    { enabled: true, url: 'http://127.0.0.1:10808', override: 'api.internal' })
+  assert.equal(custom.noProxy, 'localhost,127.0.0.1,::1,x.internal')
+})
+
+test('systemFactsEqual detects real changes only', () => {
+  const a = { enabled: true, url: 'http://127.0.0.1:10808', override: '<local>' }
+  assert.equal(systemFactsEqual(a, { ...a }), true)
+  assert.equal(systemFactsEqual(a, { ...a, override: '<local>;10.*' }), false)
+  assert.equal(systemFactsEqual(a, { ...a, url: 'http://127.0.0.1:10809' }), false)
+  assert.equal(systemFactsEqual(a, { ...a, enabled: false }), false)
+  assert.equal(systemFactsEqual(null, null), true)
+  assert.equal(systemFactsEqual(a, null), false)
 })

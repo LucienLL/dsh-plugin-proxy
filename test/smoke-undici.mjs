@@ -139,6 +139,9 @@ test('restoring the default dispatcher returns to direct routing', { timeout: 30
   try {
     process.env.HTTP_PROXY = 'http://127.0.0.1:9' // a dead proxy
     process.env.HTTPS_PROXY = 'http://127.0.0.1:9'
+    // The ambient NO_PROXY may already list loopback (e.g. the DSH harness
+    // env), which would bypass the dead proxy entirely — clear it explicitly.
+    delete process.env.NO_PROXY
     proxyAgent = new EnvHttpProxyAgent()
     setGlobalDispatcher(proxyAgent)
     await assert.rejects(fetch(`http://127.0.0.1:${origin.port}/`))
