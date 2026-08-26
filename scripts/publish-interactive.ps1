@@ -11,9 +11,9 @@
 # scripts under the system codepage (GBK), so keep every string here ASCII.
 #
 # Usage (from your own PowerShell/terminal - the browser step needs YOU):
-#   powershell -ExecutionPolicy Bypass -File E:\Deepseek\Default\dsh-plugin-proxy\scripts\publish-interactive.ps1
+#   powershell -ExecutionPolicy Bypass -File scripts\publish-interactive.ps1
 $ErrorActionPreference = 'Stop'
-$root = 'E:\Deepseek\Default\dsh-plugin-proxy'
+$root = Split-Path $PSScriptRoot -Parent
 $node = 'E:\Program Files\DeepSeek Harness\runtime\node\bin\node.exe'
 $npm = 'E:\Deepseek\Default\npm-cli\node_modules\npm\bin\npm-cli.js'
 
