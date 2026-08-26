@@ -14,8 +14,7 @@
     "lib",
     "docs",
     "cordis.patch.yml",
-    "README.md",
-    "README.zh.md"
+    "README.md"
   ],
   "scripts": {
     "test": "node --test test/*.mjs",

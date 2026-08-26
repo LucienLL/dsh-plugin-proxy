@@ -1,85 +1,77 @@
 # dsh-plugin-proxy
 
-Global proxy for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): route **agent tools, model requests and web fetches** through the Windows system proxy or a custom proxy — with one persistent switch in the main UI, an editable settings card, and **agent-visible proxy status** so the model always knows whether traffic is proxied.
+DeepSeek Harness (DSH) 全局代理插件：通过**系统代理**或**自定义地址**，让 **Agent 工具、模型请求、网页抓取**统一走代理 —— 主界面常驻一个开关，设置界面可配置地址来源，并且**模型在对话中始终明确感知当前代理状态**，避免必须直连的操作被误走代理。
 
-## Why
+## 解决的问题
 
-Without a proxy, outbound network operations fail and the agent burns tokens retrying. With this plugin, the whole runtime goes through the proxy the moment you flip one switch — and because the agent is *told* the proxy state in its system prompt (and can query/toggle it with tools), it never silently routes an operation that must go direct through the proxy.
+不走代理时，外网操作频繁失败，Agent 会反复重试而白白消耗 token。本插件让整个运行时代理开关一开即全局生效；同时系统提示中实时标注代理状态，并提供了 `proxy_status`（查询）与 `proxy_set`（切换）两个工具，模型不会在不知情的情况下被迫走代理。
 
-## What it does
+## 工作原理
 
-| Concern | Mechanism |
+| 对象 | 机制 |
 | --- | --- |
-| **Model requests** (chat completions, SSE streaming, web search/fetch providers) | Swaps the undici **global dispatcher** to `EnvHttpProxyAgent` — every in-process `fetch()` (all LLM adapters use global fetch) is routed through the proxy. |
-| **Agent subprocesses** (`curl`, `git`, `npm`, `pwsh`-spawned tools) | Writes `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`/`NO_PROXY` into `process.env`, which the harness's child env inherits. |
-| **Agent awareness** | A dynamic system-prompt section (`Proxy status: ON/OFF`) is re-rendered on every request; plus two model tools — `proxy_status` (read) and `proxy_set` (toggle). |
-| **Persistence** | Settings live in the `proxy` settings namespace (Settings → Plugins → Proxy in the web UI), layered over the composition entry, applied live (`applies: live`) — no restart to change values. |
+| **模型请求**（对话补全、SSE 流式、web_search/web_fetch 提供商） | 替换 undici **全局调度器**为 `EnvHttpProxyAgent` —— 进程内所有 `fetch()`（所有 LLM 适配器都用全局 fetch）都走代理。 |
+| **Agent 子进程**（`curl`/`git`/`npm`/pwsh 等工具） | 向 `process.env` 写入 `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`/`NO_PROXY`，DSH 的子进程环境会继承。 |
+| **Agent 感知** | 每次请求时动态重渲染系统提示段落（`Proxy status: ON/OFF`）；另有 `proxy_status`（读）与 `proxy_set`（写）两个模型工具。 |
+| **持久化** | 配置存放在 `proxy` 设置命名空间（设置 → 插件 → 代理），叠加在组合配置之上，**实时生效**（`applies: live`），改配置无需重启。 |
 
-## UI
+## 界面
 
-- **Persistent switch** at the sidebar foot (always visible): one click toggles the proxy on/off. Collapsed rail keeps a compact switch.
-- **Settings card** under *Settings → Plugins → Proxy*:
-  - **代理地址来源 (address source)**: `系统代理` (Windows Internet Settings) / `自定义地址` (custom URL) / `不使用代理` (none).
-  - **自定义代理地址 (custom URL)**: e.g. `http://127.0.0.1:7890`.
-  - **直连名单 (NO_PROXY)**: comma-separated bypass hosts. `localhost` / `127.0.0.1` / `::1` are always direct.
+- **主界面常驻开关**：位于侧边栏底部，始终可见，一键切换代理开关；侧边栏收起为窄栏时保留紧凑开关。
+- **设置卡片**（设置 → 插件 → 代理）：
+  - **代理地址来源**：`使用系统代理（Windows 设置）` / `自定义地址` / `不使用代理`。
+  - **自定义代理地址**：如 `http://127.0.0.1:7890`（仅在「自定义地址」模式下显示）。
+  - **直连名单（NO_PROXY）**：逗号分隔；`localhost` / `127.0.0.1` / `::1` 始终直连。
 
-## Agent-facing behavior
+## Agent 侧行为
 
-The model's system prompt always states the current proxy state, the effective address, and the NO_PROXY bypass list, and instructs the agent to:
+系统提示中始终标注：当前代理状态、生效地址、直连名单，并指示 Agent：
 
-- treat every outbound request as proxied unless the host is on the bypass list;
-- go direct for localhost / internal targets (bypass list);
-- use `proxy_set` with `enabled=false` for operations that must NOT use the proxy, then re-enable afterwards;
-- check `proxy_status` before retrying failed network operations instead of blindly retrying.
+- 除非目标在直连名单内，否则默认所有外发请求都走代理；
+- 本机 / 内网目标直接访问（在直连名单内）；
+- 必须直连的操作先调用 `proxy_set`（enabled=false），完成后恢复（enabled=true）；
+- 网络操作失败时先查 `proxy_status` 再决定是否重试，不要盲目反复重试。
 
-`proxy_set` persists the change — the switch in the UI follows it.
+`proxy_set` 的改动会被持久化，界面开关随之同步。
 
-## Install
+## 安装
 
 ```sh
-# in the DSH profile directory (or anywhere, then restart DSH)
+# 在 DSH 的 profile 目录（或任意位置），随后重启 DSH
 dsh plugin --profile web add dsh-plugin-proxy
 ```
 
-or add the package to your profile `package.json` dependencies and `dsh.profile.bundles`, then restart DSH. The first install requires a DSH restart; after that all configuration is live.
+或手动把包加入 profile 的 `package.json` 依赖与 `dsh.profile.bundles`，然后重启 DSH。首次安装需要重启 DSH；之后所有配置均实时生效。
 
-## Configuration
+## 配置项
 
-All fields are editable in the settings UI; the same schema accepts composition defaults:
-
-| Field | Type | Default | Meaning |
+| 字段 | 类型 | 默认值 | 含义 |
 | --- | --- | --- | --- |
-| `enabled` | boolean | `false` | Master switch (also toggled from the sidebar / `proxy_set`). |
-| `mode` | `system` \| `custom` \| `none` | `system` | Proxy address source. |
-| `customUrl` | string | `http://127.0.0.1:7890` | Used when `mode: custom`. |
-| `noProxy` | string | `localhost,127.0.0.1,::1` | NO_PROXY bypass list (`<local>` maps to the loopbacks). |
-| `systemPollMs` | number | `30000` | Poll interval (ms) for the Windows system proxy while `mode: system` + enabled, so the runtime follows the system proxy being toggled on/off; `0` disables polling. |
+| `enabled` | boolean | `false` | 总开关（侧边栏开关 / `proxy_set` 也改这里）。 |
+| `mode` | `system` \| `custom` \| `none` | `system` | 代理地址来源。 |
+| `customUrl` | string | `http://127.0.0.1:7890` | `mode: custom` 时使用。 |
+| `noProxy` | string | `localhost,127.0.0.1,::1` | 直连名单（`<local>` 映射为本机回环地址）。 |
+| `systemPollMs` | number | `30000` | 系统代理轮询间隔（ms）：`mode: system` 且开关开启时，自动跟随 Windows 系统代理的开/关变化（如 Clash/v2rayN 切换）；`0` 关闭轮询。 |
 
-In `mode: system` the Windows `ProxyOverride` bypass list is merged into
-NO_PROXY (`<local>` and `*.domain` entries honored; IP-prefix wildcards like
-`127.*` are dropped because undici cannot express them).
+`mode: system` 时，Windows 的 `ProxyOverride` 直连列表会自动合并进 NO_PROXY（`<local>` 与 `*.domain` 生效；`127.*` 这类 IP 前缀通配因 undici 无法表达会被丢弃）。
 
-## Development
+## 开发与测试
 
 ```sh
 node --check lib/index.js && node --check lib/proxy.js && node --check lib/client.js
-node test/proxy.test.mjs      # pure logic
-node test/plugin-shape.mjs    # export shape against real @deepseek-ai packages
-node test/apply.mjs           # end-to-end: mount the plugin, toggle the proxy live
-node test/client-shape.mjs    # browser inject contract (service names only)
-node test/smoke-undici.mjs    # real undici routing through a local proxy
+node test/proxy.test.mjs      # 纯逻辑单测
+node test/plugin-shape.mjs    # 导出形状（对真实 @deepseek-ai 包）
+node test/apply.mjs           # 端到端：挂载插件、实时切换代理
+node test/client-shape.mjs    # 浏览器端 inject 契约（只能写服务名）
+node test/smoke-undici.mjs    # 真实 undici 经本地代理路由
 ```
 
-The `@deepseek-ai/*` peer dependencies and `undici` must resolve for the tests
-(junction them to the DSH checkout / profile `node_modules`, or `pnpm install`).
+测试需要能解析 `@deepseek-ai/*` peer 依赖与 `undici`（可 junction 到 DSH 安装 / profile 的 `node_modules`，或 `pnpm install`）。
 
-> Maintainer note: the browser bundle's `exports.inject` must list Cordis
-> **service names** (`slots`, `settingsScope`), never package names — a
-> package-name list there keeps the plugin permanently pending and blocks web
-> boot. See [`docs/LESSONS.md`](docs/LESSONS.md) and the `client-shape` test.
+> 维护者注意：浏览器端 `exports.inject` 必须写 Cordis **服务名**（`slots`、`settingsScope`），绝不能写包名——写包名会让插件永久 pending 并卡死 web boot。详见 [`docs/LESSONS.md`](docs/LESSONS.md) 与 `client-shape` 回归测试。
 
-## Notes & limitations
+## 已知限制
 
-- The dispatcher swap covers in-process `fetch()`; it does not configure the WebView/Chromium used by the DSH desktop shell (browser traffic already follows the OS system proxy).
-- `mode: system` reads the Windows *user* proxy (HKCU Internet Settings) via `reg.exe`; SOCKS-only proxies are not usable by undici's HTTP CONNECT agents — use a mixed/HTTP proxy address.
-- The plugin ships a hand-written browser client (`lib/client.js`, no build step), the same loader format as dsh-plugin-focus.
+- 调度器替换覆盖进程内 `fetch()`，不配置桌面端 WebView/Chromium（浏览器流量本就跟随系统代理）。
+- `mode: system` 读取 Windows **用户**代理（HKCU Internet 设置，通过 `reg.exe`）；纯 SOCKS 代理无法被 undici 的 HTTP CONNECT 使用 —— 请使用 HTTP 混合代理地址。
+- 浏览器端客户端为手写模块（`lib/client.js`，无需构建），与 dsh-plugin-focus 相同的加载器格式。
