@@ -10,8 +10,9 @@ DeepSeek Harness (DSH) 全局代理插件：通过**系统代理**或**自定义
 
 | 对象 | 机制 |
 | --- | --- |
-| **模型请求**（对话补全、SSE 流式、web_search/web_fetch 提供商） | 替换 undici **全局调度器**为 `EnvHttpProxyAgent` —— 进程内所有 `fetch()`（所有 LLM 适配器都用全局 fetch）都走代理。 |
-| **Agent 子进程**（`curl`/`git`/`npm`/pwsh 等工具） | 向 `process.env` 写入 `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`/`NO_PROXY`，DSH 的子进程环境会继承。 |
+| **模型请求与普通 `fetch()`**（对话补全、SSE 流式、web_search 提供商） | 安装进程级代理策略（见下一行）；所有走全局 `fetch()` 的调用方无需感知本插件即被覆盖。 |
+| **`web_fetch`（网页抓取）** | 该提供商自带私有 undici 传输，只认 DSH 官方 `@deepseek-ai/dsh-http-proxy` 的 `proxyRouteFor()` 判定，替换全局调度器**对它无效**。本插件因此**复用宿主已加载的同一份该模块实例**（`createRequire` 解析，ESM 按 URL 缓存故与启动器共享同一 `active` 策略）来安装/卸载策略，使抓取与其余流量同受本开关控制。模块不可解析时降级为仅替换全局调度器（不覆盖 `web_fetch`）。 |
+| **Agent 子进程**（`curl`/`git`/`npm`/pwsh 等工具） | 代理策略安装时由官方 installer 写入 `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`/`NO_PROXY`（本插件再镜像一份小写名以兼容 POSIX），DSH 的子进程环境会继承。 |
 | **Agent 感知** | 每次请求时动态重渲染系统提示段落（`Proxy status: ON/OFF`）；另有 `proxy_status`（读）与 `proxy_set`（写）两个模型工具。 |
 | **持久化** | 配置存放在 `proxy` 设置命名空间（设置 → 插件 → 代理），叠加在组合配置之上，**实时生效**（`applies: live`），改配置无需重启。 |
 
@@ -62,6 +63,7 @@ node --check lib/index.js && node --check lib/proxy.js && node --check lib/clien
 node test/proxy.test.mjs      # 纯逻辑单测
 node test/plugin-shape.mjs    # 导出形状（对真实 @deepseek-ai 包）
 node test/apply.mjs           # 端到端：挂载插件、实时切换代理
+node test/apply-policy-shared.mjs  # 端到端：设置变更驱动官方 proxyRouteFor()（缺 dsh-http-proxy 时跳过）
 node test/client-shape.mjs    # 浏览器端 inject 契约（只能写服务名）
 node test/smoke-undici.mjs    # 真实 undici 经本地代理路由
 ```
@@ -73,5 +75,8 @@ node test/smoke-undici.mjs    # 真实 undici 经本地代理路由
 ## 已知限制
 
 - 调度器替换覆盖进程内 `fetch()`，不配置桌面端 WebView/Chromium（浏览器流量本就跟随系统代理）。
+- `web_fetch` 的覆盖依赖宿主能解析到 `@deepseek-ai/dsh-http-proxy`（DSH ≥ 0.1.5 随 CLI 安装，
+  通常可用）。解析不到时插件自动降级、不影响启动，但该提供商的抓取将保持宿主原有（直连）策略；
+  此时可在 profile 中把 `@deepseek-ai/dsh-http-proxy` 与 `@deepseek-ai/dsh` 同源安装以恢复覆盖。
 - `mode: system` 读取 Windows **用户**代理（HKCU Internet 设置，通过 `reg.exe`）；纯 SOCKS 代理无法被 undici 的 HTTP CONNECT 使用 —— 请使用 HTTP 混合代理地址。
 - 浏览器端客户端为手写模块（`lib/client.js`，无需构建），与 dsh-plugin-focus 相同的加载器格式。

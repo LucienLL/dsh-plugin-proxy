@@ -71,6 +71,19 @@ function createSettingsStub() {
     get(ns) {
       return registrations.get(ns)?.resolved
     },
+    /**
+     * The registration entry the plugin actually calls (DSH ≥ 0.1.2-rc.1 moved
+     * this from a module export onto the SettingsProvider instance). The stub
+     * mirrors the provider's contract: register the namespace with the
+     * composition entry as its base, expose the scoped reader to the caller, and
+     * notify on every resolved change.
+     */
+    installSection(owner, ns, schema, entry, hooks) {
+      const scope = this.register(ns, schema, { base: entry })
+      hooks.setSource(() => scope.get())
+      scope.watch(() => hooks.onChange())
+      hooks.onChange()
+    },
     update(ns, patch) {
       const entry = registrations.get(ns)
       if (entry === undefined) throw new Error(`settings namespace "${ns}" is not registered`)
