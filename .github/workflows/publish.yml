@@ -1,0 +1,76 @@
+# Publishes this package to npm through a trusted publisher (OIDC).
+# No NPM_TOKEN secret is involved: the runner exchanges a GitHub OIDC token for
+# short-lived npm credentials, and npm attaches a provenance attestation.
+#
+# One-time setup on the npm side, per package:
+#   npm trust github <package> --file publish.yml --repo LucienLL/<this-repo> --allow-publish
+# (see setup-trusted-publishers.ps1 in the local workspace for the bulk version)
+#
+# Never triggers on a plain push: only on a published release or manually.
+name: publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write        # required by trusted publishing
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+        # registry-url is deliberately omitted: setup-node would write an .npmrc
+        # holding an empty NODE_AUTH_TOKEN, which fights with OIDC authentication.
+
+      - name: Install a recent npm (trusted publishing needs >= 11.15)
+        run: npm install --global npm@^11.15.0
+
+      - name: Fail fast when the release tag does not match package.json
+        if: github.event_name == 'release'
+        run: |
+          set -euo pipefail
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG="${{ github.event.release.tag_name }}"
+          if [ "v$PKG_VERSION" != "$TAG" ] && [ "$PKG_VERSION" != "$TAG" ]; then
+            echo "release tag $TAG does not match package.json $PKG_VERSION" >&2
+            exit 1
+          fi
+
+      - name: Skip when this version is already on the registry
+        id: check
+        run: |
+          set -euo pipefail
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "reason=already published" >> "$GITHUB_OUTPUT"
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The test suite is intentionally not run here: these plugins import
+      # @deepseek-ai/* packages that only exist inside a DSH runtime, so tests
+      # stay local. Run them before tagging.
+      - name: Publish with provenance
+        if: steps.check.outputs.already == 'false'
+        run: npm publish --provenance --access public
+
+      - name: Write a job summary
+        run: |
+          echo "version ${{ steps.check.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "already published: ${{ steps.check.outputs.already }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "reason: ${{ steps.check.outputs.reason }}" >> "$GITHUB_STEP_SUMMARY"
