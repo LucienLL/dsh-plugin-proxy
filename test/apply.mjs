@@ -10,6 +10,7 @@ import assert from 'node:assert/strict'
 import { Context } from '@deepseek-ai/cordis'
 import { setGlobalDispatcher, getGlobalDispatcher } from 'undici'
 import * as plugin from '../lib/index.js'
+import { plainConfig } from '../lib/settings-compat.js'
 
 const PROXY_ENV = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY']
 
@@ -38,8 +39,9 @@ function createSettingsStub() {
     entry.user = { ...entry.user, ...patch }
     entry.revision += 1
     const previous = entry.resolved
-    entry.resolved = entry.schema({ ...entry.base, ...entry.user })
-    for (const watcher of [...entry.watchers]) watcher(entry.resolved, previous)
+    entry.resolved = entry.schema({ ...plainConfig(entry.base ?? {}), ...entry.user })
+    // The host hands plugins plain values (Config fields are volatile on DSH 0.2).
+    for (const watcher of [...entry.watchers]) watcher(plainConfig(entry.resolved), plainConfig(previous))
   }
   const service = {
     register(ns, schema, options = {}) {
@@ -47,14 +49,14 @@ function createSettingsStub() {
       const entry = {
         schema,
         base: options.base,
-        resolved: schema(options.base ?? {}),
+        resolved: schema(plainConfig(options.base ?? {})),
         watchers: new Set(),
         user: {},
         revision: 0,
       }
       registrations.set(ns, entry)
       return {
-        get: () => entry.resolved,
+        get: () => plainConfig(entry.resolved),
         watch: (callback) => {
           entry.watchers.add(callback)
           return () => entry.watchers.delete(callback)
@@ -63,7 +65,7 @@ function createSettingsStub() {
         replace: (section) => {
           entry.user = section
           entry.revision += 1
-          entry.resolved = entry.schema({ ...entry.base, ...entry.user })
+          entry.resolved = entry.schema({ ...plainConfig(entry.base ?? {}), ...entry.user })
           for (const watcher of [...entry.watchers]) watcher(entry.resolved, undefined)
         },
       }
@@ -80,7 +82,7 @@ function createSettingsStub() {
       return [...registrations.entries()].map(([ns, entry]) => ({
         ns,
         schema: entry.schema.toJSON(),
-        value: entry.resolved,
+        value: plainConfig(entry.resolved),
         revision: entry.revision,
         base: entry.base,
         applies: 'live',
@@ -122,7 +124,7 @@ test('apply() wires settings, tools, prompt section, and live proxy toggling', a
     ctx.provide(serviceName, value)
   }
   try {
-    const fiber = ctx.plugin(plugin, plugin.Config({}))
+    const fiber = ctx.plugin(plugin, {})
     await fiber
     await settle()
 

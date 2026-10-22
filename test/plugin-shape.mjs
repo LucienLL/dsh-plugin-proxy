@@ -7,6 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Config, apply, inject, name } from '../lib/index.js'
+import { plainConfig } from '../lib/settings-compat.js'
 
 test('plugin export shape matches the Cordis loader contract', () => {
   assert.equal(name, 'proxy')
@@ -19,7 +20,8 @@ test('plugin export shape matches the Cordis loader contract', () => {
 })
 
 test('Config resolves composition defaults', () => {
-  const config = Config({})
+  // Config fields are volatile on DSH 0.2, so parse through the plugin's own unwrapper.
+  const config = plainConfig(Config({}))
   assert.equal(config.enabled, false)
   assert.equal(config.mode, 'system')
   assert.equal(config.customUrl, 'http://127.0.0.1:7890')
@@ -27,7 +29,7 @@ test('Config resolves composition defaults', () => {
 })
 
 test('Config accepts a full composition entry', () => {
-  const config = Config({ enabled: true, mode: 'custom', customUrl: 'http://127.0.0.1:10809', noProxy: 'internal.local' })
+  const config = plainConfig(Config({ enabled: true, mode: 'custom', customUrl: 'http://127.0.0.1:10809', noProxy: 'internal.local' }))
   assert.equal(config.enabled, true)
   assert.equal(config.mode, 'custom')
   assert.equal(config.customUrl, 'http://127.0.0.1:10809')
